@@ -12,20 +12,24 @@ import java.util.HashSet;
 import org.apache.lucene.analysis.Analyzer;
 import org.apache.lucene.document.Document;
 import org.apache.lucene.document.Field;
+import org.apache.lucene.document.FieldType;
+import org.apache.lucene.document.TextField;
 import org.apache.lucene.index.CorruptIndexException;
+import org.apache.lucene.index.DirectoryReader;
+import org.apache.lucene.index.IndexOptions;
 import org.apache.lucene.index.IndexReader;
 import org.apache.lucene.index.IndexWriter;
 import org.apache.lucene.index.IndexWriterConfig;
+import org.apache.lucene.index.IndexableFieldType;
 import org.apache.lucene.index.Term;
-import org.apache.lucene.queryParser.ParseException;
-import org.apache.lucene.queryParser.QueryParser;
+import org.apache.lucene.queryparser.classic.ParseException;
+import org.apache.lucene.queryparser.classic.QueryParser;
 import org.apache.lucene.search.IndexSearcher;
 import org.apache.lucene.search.Query;
 import org.apache.lucene.search.TermQuery;
 import org.apache.lucene.search.TopDocs;
 import org.apache.lucene.store.LockObtainFailedException;
 import org.apache.lucene.store.RAMDirectory;
-import org.apache.lucene.util.Version;
 
 import com.mxgraph.examples.swing.SCXMLGraphEditor;
 import com.mxgraph.examples.swing.editor.fileimportexport.SCXMLEdge;
@@ -39,26 +43,25 @@ import com.mxgraph.util.mxEventSource.mxIEventListener;
 
 public class SCXMLSearch {
 
-	
 	private static final String INDEXID = "LUCENECELLID";
-	private RAMDirectory idx=new RAMDirectory();
+	private RAMDirectory idx = new RAMDirectory();
 	private IndexSearcher searcher;
 	private int defaultNumResults;
-	private Class analyzer=null;
+	private Class analyzer = null;
 	private SCXMLGraphEditor editor;
 
-	public SCXMLSearch(SCXMLGraphEditor editor,int numResults) {
-		this.editor=editor;
-        this.defaultNumResults=numResults;
+	public SCXMLSearch(SCXMLGraphEditor editor, int numResults) {
+		this.editor = editor;
+		this.defaultNumResults = numResults;
 
-        SCXMLGraph graph = editor.getGraphComponent().getGraph();
+		SCXMLGraph graph = editor.getGraphComponent().getGraph();
 		graph.addListener(mxEvent.CELLS_REMOVED, new mxIEventListener() {
 			@Override
 			public void invoke(Object sender, mxEventObject evt) {
-				Object[] arg=(Object[]) evt.getProperty("cells");
-				if (arg!=null) {
-					ArrayList<mxCell> cells=new ArrayList<mxCell>();
-					for (Object o:arg) {
+				Object[] arg = (Object[]) evt.getProperty("cells");
+				if (arg != null) {
+					ArrayList<mxCell> cells = new ArrayList<mxCell>();
+					for (Object o : arg) {
 						if (o instanceof mxCell) {
 							cells.add((mxCell) o);
 						}
@@ -74,10 +77,10 @@ public class SCXMLSearch {
 		graph.addListener(mxEvent.CELLS_ADDED, new mxIEventListener() {
 			@Override
 			public void invoke(Object sender, mxEventObject evt) {
-				Object[] arg=(Object[]) evt.getProperty("cells");
-				if (arg!=null) {
-					ArrayList<mxCell> cells=new ArrayList<mxCell>();
-					for (Object o:arg) {
+				Object[] arg = (Object[]) evt.getProperty("cells");
+				if (arg != null) {
+					ArrayList<mxCell> cells = new ArrayList<mxCell>();
+					for (Object o : arg) {
 						if (o instanceof mxCell) {
 							cells.add((mxCell) o);
 						}
@@ -91,163 +94,192 @@ public class SCXMLSearch {
 			}
 		});
 	}
-	
-	public void buildIndex() throws CorruptIndexException, LockObtainFailedException, IOException, ClassNotFoundException, SecurityException, NoSuchMethodException, IllegalArgumentException, InstantiationException, IllegalAccessException, InvocationTargetException {
+
+	public void buildIndex() throws CorruptIndexException, LockObtainFailedException, IOException,
+			ClassNotFoundException, SecurityException, NoSuchMethodException, IllegalArgumentException,
+			InstantiationException, IllegalAccessException, InvocationTargetException {
 		SCXMLGraph graph = editor.getGraphComponent().getGraph();
-		analyzer=Class.forName("com.mxgraph.examples.swing.editor.scxml.SCXMLAnalyzer");
+		analyzer = Class.forName("com.mxgraph.examples.swing.editor.scxml.SCXMLAnalyzer");
 		Constructor constructor = analyzer.getConstructor();
-		//IndexWriter writer = new IndexWriter(idx, (Analyzer) constructor.newInstance(), IndexWriter.MaxFieldLength.UNLIMITED);
-		IndexWriter writer = new IndexWriter(idx, new IndexWriterConfig(Version.LUCENE_36, (Analyzer) constructor.newInstance()));
-        writer.deleteAll();
-        writer.commit();
-        
+		// IndexWriter writer = new IndexWriter(idx, (Analyzer)
+		// constructor.newInstance(), IndexWriter.MaxFieldLength.UNLIMITED);
+		IndexWriter writer = new IndexWriter(idx, new IndexWriterConfig((Analyzer) constructor.newInstance()));
+		writer.deleteAll();
+		writer.commit();
+
 		mxIGraphModel model = graph.getModel();
-		mxCell root=(mxCell) model.getRoot();
+		mxCell root = (mxCell) model.getRoot();
 		root.getChildCount();
 
-		addCellsToIndex(root,writer,true);
-        //writer.optimize();
-        writer.close();
+		addCellsToIndex(root, writer, true);
+		// writer.optimize();
+		writer.close();
 
-        searcher = new IndexSearcher(IndexReader.open(idx));
+		searcher = new IndexSearcher(DirectoryReader.open(idx));
 	}
-	
-	HashSet<String> cellsAlreadySeen=new HashSet<String>();
-	HashMap<String,mxCell> doc2mxCell=new HashMap<String, mxCell>();
-	private void addCellsToIndex(mxCell c,IndexWriter writer,boolean isRoot) throws CorruptIndexException, IOException {
+
+	HashSet<String> cellsAlreadySeen = new HashSet<String>();
+	HashMap<String, mxCell> doc2mxCell = new HashMap<String, mxCell>();
+
+	private void addCellsToIndex(mxCell c, IndexWriter writer, boolean isRoot)
+			throws CorruptIndexException, IOException {
 		if (isRoot) {
 			cellsAlreadySeen.clear();
 			doc2mxCell.clear();
 		}
-		if (c!=null) {
-			String cName=c.getId();
+		if (c != null) {
+			String cName = c.getId();
 			if (!cellsAlreadySeen.contains(cName)) {
 				cellsAlreadySeen.add(cName);
-				if (c.getValue()!=null) {
-					Document doc=createDocumentForCell(c);
+				if (c.getValue() != null) {
+					Document doc = createDocumentForCell(c);
 					writer.addDocument(doc);
 					doc2mxCell.put(doc.get(INDEXID), c);
 				}
-				int numChildren=c.getChildCount();
-				for(int i=0;i<numChildren;i++) {
-					mxCell child=(mxCell) c.getChildAt(i);
-					addCellsToIndex(child,writer,false);
+				int numChildren = c.getChildCount();
+				for (int i = 0; i < numChildren; i++) {
+					mxCell child = (mxCell) c.getChildAt(i);
+					addCellsToIndex(child, writer, false);
 				}
 			}
 		}
 	}
-	private Document createDocumentForSCXMLEdge(SCXMLEdge v,String cellID) {
-        Document doc = new Document();
-        doc.add(new Field(INDEXID, cellID,Field.Store.YES,Field.Index.ANALYZED));
-        doc.add(new Field("source", new StringReader(v.getSCXMLSource().toLowerCase())));
-        doc.add(new Field("target", new StringReader(v.getSCXMLTargets().toString().toLowerCase())));
-        doc.add(new Field("eve", new StringReader(v.getEvent().toLowerCase())));
-        doc.add(new Field("cnd", new StringReader(v.getCondition().toLowerCase())));
-        doc.add(new Field("eexe", new StringReader(v.getExe().toLowerCase())));
-        doc.add(new Field("com", new StringReader(v.getComments().toLowerCase())));
-        doc.add(new Field("all", new StringReader((v.getSCXMLSource()+" "+v.getSCXMLTargets().toString()+" "+v.getEvent()+" "+v.getCondition()+" "+v.getExe()+" "+v.getComments()).toLowerCase())));
-        return doc;
-	}
-	private Document createDocumentForSCXMLNode(SCXMLNode v,String cellID) {
-        Document doc = new Document();
-        doc.add(new Field(INDEXID, cellID,Field.Store.YES,Field.Index.ANALYZED));
-        doc.add(new Field("id", new StringReader(v.getID().toLowerCase())));
-        doc.add(new Field("inc", new StringReader(v.getOutsourcedLocation().toLowerCase())));
-        doc.add(new Field("dm", new StringReader(v.getDatamodel().toLowerCase())));
-        doc.add(new Field("ns", new StringReader(v.getNamespace().toLowerCase())));
-        doc.add(new Field("entry", new StringReader(v.getOnEntry().toLowerCase())));
-        doc.add(new Field("exit", new StringReader(v.getOnExit().toLowerCase())));
-        doc.add(new Field("init", new StringReader(v.getOnInitialEntry().toLowerCase())));
-        doc.add(new Field("dd", new StringReader(v.getDoneData().toLowerCase())));
-        doc.add(new Field("com", new StringReader(v.getComments().toLowerCase())));
-        doc.add(new Field("all", new StringReader((v.getID()+" "+v.getOutsourcedLocation()+" "+v.getDatamodel()+" "+v.getNamespace()+" "+v.getOnEntry()+" "+v.getOnExit()+" "+v.getOnInitialEntry()+" "+v.getDoneData()+" "+v.getComments()).toLowerCase())));
+
+	private Document createDocumentForSCXMLEdge(SCXMLEdge v, String cellID) {
+		Document doc = new Document();
+
+		FieldType fieldType = new FieldType();
+		fieldType.setStored(true);
+
+		doc.add(new Field(INDEXID, cellID, fieldType));
+
+		doc.add(new TextField("source", new StringReader(v.getSCXMLSource().toLowerCase())));
+		doc.add(new TextField("target", new StringReader(v.getSCXMLTargets().toString().toLowerCase())));
+		doc.add(new TextField("eve", new StringReader(v.getEvent().toLowerCase())));
+		doc.add(new TextField("cnd", new StringReader(v.getCondition().toLowerCase())));
+		doc.add(new TextField("eexe", new StringReader(v.getExe().toLowerCase())));
+		doc.add(new TextField("com", new StringReader(v.getComments().toLowerCase())));
+		doc.add(new TextField("all", new StringReader((v.getSCXMLSource() + " " + v.getSCXMLTargets().toString() + " "
+				+ v.getEvent() + " " + v.getCondition() + " " + v.getExe() + " " + v.getComments()).toLowerCase())));
 		return doc;
 	}
-	
+
+	private Document createDocumentForSCXMLNode(SCXMLNode v, String cellID) {
+		Document doc = new Document();
+
+		FieldType fieldType = new FieldType();
+		fieldType.setStored(true);
+		doc.add(new Field(INDEXID, cellID, fieldType));
+
+		doc.add(new TextField("id", new StringReader(v.getID().toLowerCase())));
+		doc.add(new TextField("inc", new StringReader(v.getOutsourcedLocation().toLowerCase())));
+		doc.add(new TextField("dm", new StringReader(v.getDatamodel().toLowerCase())));
+		doc.add(new TextField("ns", new StringReader(v.getNamespace().toLowerCase())));
+		doc.add(new TextField("entry", new StringReader(v.getOnEntry().toLowerCase())));
+		doc.add(new TextField("exit", new StringReader(v.getOnExit().toLowerCase())));
+		doc.add(new TextField("init", new StringReader(v.getOnInitialEntry().toLowerCase())));
+		doc.add(new TextField("dd", new StringReader(v.getDoneData().toLowerCase())));
+		doc.add(new TextField("com", new StringReader(v.getComments().toLowerCase())));
+		doc.add(new TextField("all",
+				new StringReader((v.getID() + " " + v.getOutsourcedLocation() + " " + v.getDatamodel() + " "
+						+ v.getNamespace() + " " + v.getOnEntry() + " " + v.getOnExit() + " " + v.getOnInitialEntry()
+						+ " " + v.getDoneData() + " " + v.getComments()).toLowerCase())));
+		return doc;
+	}
+
 	private Document createDocumentForCell(mxCell c) {
-		String cellID=c.getId();
-		Object v=c.getValue();
-		Document doc=(c.isVertex())?createDocumentForSCXMLNode((SCXMLNode)v,cellID):createDocumentForSCXMLEdge((SCXMLEdge)v,cellID);
+		String cellID = c.getId();
+		Object v = c.getValue();
+		Document doc = (c.isVertex()) ? createDocumentForSCXMLNode((SCXMLNode) v, cellID)
+				: createDocumentForSCXMLEdge((SCXMLEdge) v, cellID);
 		return doc;
 	}
-	public void updateIndex(Collection<mxCell> cs,boolean add) throws CorruptIndexException, IOException, ParseException, IllegalArgumentException, SecurityException, InstantiationException, IllegalAccessException, InvocationTargetException, NoSuchMethodException {
+
+	public void updateIndex(Collection<mxCell> cs, boolean add) throws Exception {
 		Constructor constructor = analyzer.getConstructor();
-		IndexWriter writer = new IndexWriter(idx, (Analyzer) constructor.newInstance(), IndexWriter.MaxFieldLength.UNLIMITED);
+
+		IndexWriterConfig indexConfig = new IndexWriterConfig((Analyzer) constructor.newInstance());
+		IndexWriter writer = new IndexWriter(idx, indexConfig);
 		try {
-			for(mxCell c:cs) {
-				Query q=getQueryForGettingDocumentOfCell(c);
-				//System.out.println("query: "+q.getClass()+" "+q);
+			for (mxCell c : cs) {
+				Query q = getQueryForGettingDocumentOfCell(c);
+				// System.out.println("query: "+q.getClass()+" "+q);
 				writer.deleteDocuments(q);
 
 				TopDocs result = searcher.search(q, this.defaultNumResults);
-				//printResult(result);
-	        	int numHits=result.totalHits;
+				// printResult(result);
+				long numHits = result.totalHits.value;
 
-	        	for(int i=0;i<numHits;i++) {
-	        		int docPos=result.scoreDocs[i].doc;
-	        		Document doc = searcher.doc(docPos);
-	        		doc2mxCell.remove(doc.get(INDEXID));
-	        	}
+				for (int i = 0; i < numHits; i++) {
+					int docPos = result.scoreDocs[i].doc;
+					Document doc = searcher.doc(docPos);
+					doc2mxCell.remove(doc.get(INDEXID));
+				}
 
-	        	writer.commit();
+				writer.commit();
 				if (add) {
-					Document doc=createDocumentForCell(c);
+					Document doc = createDocumentForCell(c);
 					doc2mxCell.put(doc.get(INDEXID), c);
 					writer.addDocument(doc);
 				}
 			}
-			//writer.optimize();
+			// writer.optimize();
 		} catch (Exception e) {
 			e.printStackTrace();
 		}
-        writer.close();        
-        searcher.close();
-        searcher = new IndexSearcher(idx);
-    }
-	
-	public Query getQueryForGettingDocumentOfCell(mxCell c) throws ParseException, IllegalArgumentException, InstantiationException, IllegalAccessException, InvocationTargetException, SecurityException, NoSuchMethodException {
-		String cellID=c.getId();
-        Query q=new TermQuery(new Term(INDEXID, cellID));
-        return q;
-	}
-	
-	public ArrayList<mxCell> find(String query) throws IOException, IllegalArgumentException, InstantiationException, IllegalAccessException, InvocationTargetException, SecurityException, NoSuchMethodException {
-		Constructor constructor = analyzer.getConstructor();
-        QueryParser queryParser = new QueryParser(Version.LUCENE_30,"all",(Analyzer) constructor.newInstance());
-        try {
-        	Query q = queryParser.parse(query);
-			//System.out.println("query: "+q.getClass()+" "+q);
-        	TopDocs result = searcher.search(q, this.defaultNumResults);
-        	int numHits=result.totalHits;
+		writer.close();
+		searcher.getIndexReader().close();
 
-        	ArrayList<mxCell>ret=new ArrayList<mxCell>();
-        	for(int i=0;i<numHits;i++) {
-        		int docPos=result.scoreDocs[i].doc;
-        		Document doc = searcher.doc(docPos);
-        		mxCell matchingCell=doc2mxCell.get(doc.get(INDEXID));
-        		if (matchingCell!=null) {
-        			ret.add(matchingCell);
-        		}
-        	}
-        	return ret;
-        } catch (ParseException e) {
-        }
+		// searcher.close();
+		IndexReader r = DirectoryReader.open(idx);
+
+		searcher = new IndexSearcher(r);
+	}
+
+	public Query getQueryForGettingDocumentOfCell(mxCell c) throws Exception {
+		String cellID = c.getId();
+		Query q = new TermQuery(new Term(INDEXID, cellID));
+		return q;
+	}
+
+	public ArrayList<mxCell> find(String query) throws IOException, IllegalArgumentException, InstantiationException,
+			IllegalAccessException, InvocationTargetException, SecurityException, NoSuchMethodException {
+		Constructor constructor = analyzer.getConstructor();
+		QueryParser queryParser = new QueryParser("all", (Analyzer) constructor.newInstance());
+		try {
+			Query q = queryParser.parse(query);
+			// System.out.println("query: "+q.getClass()+" "+q);
+			TopDocs result = searcher.search(q, this.defaultNumResults);
+			long numHits = result.totalHits.value;
+
+			ArrayList<mxCell> ret = new ArrayList<mxCell>();
+			for (int i = 0; i < numHits; i++) {
+				int docPos = result.scoreDocs[i].doc;
+				Document doc = searcher.doc(docPos);
+				mxCell matchingCell = doc2mxCell.get(doc.get(INDEXID));
+				if (matchingCell != null) {
+					ret.add(matchingCell);
+				}
+			}
+			return ret;
+		} catch (ParseException e) {
+		}
 		return null;
 	}
 
-	public void printResult(TopDocs result) throws CorruptIndexException, IOException {
-		int numHits=result.totalHits;
+	public void printResult(TopDocs result) throws Exception {
+		long numHits = result.totalHits.value;
 
-		for(int i=0;i<numHits;i++) {
-			int docPos=result.scoreDocs[i].doc;
+		for (int i = 0; i < numHits; i++) {
+			int docPos = result.scoreDocs[i].doc;
 			Document doc = searcher.doc(docPos);
-			mxCell matchingCell=doc2mxCell.get(doc.get(INDEXID));
-			if (matchingCell!=null) {
-				System.out.println(" search result: "+matchingCell.getValue());
+			mxCell matchingCell = doc2mxCell.get(doc.get(INDEXID));
+			if (matchingCell != null) {
+				System.out.println(" search result: " + matchingCell.getValue());
 			}
 		}
 	}
-	
+
 	public void clearDoc2mxCell() {
 		doc2mxCell.clear();
 	}

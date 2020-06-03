@@ -1187,7 +1187,7 @@ public class SCXMLGraphEditor extends JPanel
 		}
 	}
 	
-	public JFrame createFrame(SCXMLGraphEditor editor) throws CorruptIndexException, LockObtainFailedException, IOException, SecurityException, IllegalArgumentException, ClassNotFoundException, NoSuchMethodException, InstantiationException, IllegalAccessException, InvocationTargetException
+	public JFrame createFrame(SCXMLGraphEditor editor) throws Exception 
 	{
 		SCXMLEditorFrame frame = new SCXMLEditorFrame(this);
 		// the contentPane of the JRootPane is a JPanel (that is the FSMGraphEditor)

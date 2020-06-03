@@ -8,8 +8,6 @@ import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
 import java.awt.event.WindowEvent;
 import java.awt.event.WindowListener;
-import java.io.IOException;
-import java.lang.reflect.InvocationTargetException;
 import java.util.ArrayList;
 import java.util.Collection;
 
@@ -31,10 +29,6 @@ import javax.swing.event.DocumentListener;
 import javax.swing.event.ListSelectionEvent;
 import javax.swing.event.ListSelectionListener;
 import javax.swing.text.Document;
-
-import org.apache.lucene.index.CorruptIndexException;
-import org.apache.lucene.queryParser.ParseException;
-import org.apache.lucene.store.LockObtainFailedException;
 
 import com.mxgraph.examples.swing.SCXMLGraphEditor;
 import com.mxgraph.examples.swing.editor.fileimportexport.SCXMLEdge;
@@ -58,7 +52,7 @@ public class SCXMLSearchTool extends JDialog implements ListSelectionListener, W
 	private SCXMLGraphComponent gc;
 	private ListCellSelector listSelectorHandler;
 
-	public SCXMLSearchTool(JFrame parent, SCXMLGraphEditor editor) throws CorruptIndexException, LockObtainFailedException, IOException, SecurityException, IllegalArgumentException, ClassNotFoundException, NoSuchMethodException, InstantiationException, IllegalAccessException, InvocationTargetException {
+	public SCXMLSearchTool(JFrame parent, SCXMLGraphEditor editor) throws Exception {
 		super(parent,"Find");
 		search = new SCXMLSearch(editor,defaultNumResults);
 
@@ -84,15 +78,15 @@ public class SCXMLSearchTool extends JDialog implements ListSelectionListener, W
 		setVisible(false);
 	}
 	
-	public void buildIndex() throws CorruptIndexException, LockObtainFailedException, IOException, SecurityException, IllegalArgumentException, ClassNotFoundException, NoSuchMethodException, InstantiationException, IllegalAccessException, InvocationTargetException {
+	public void buildIndex() throws Exception {
 		search.buildIndex();
 	}
-	public void updateCellInIndex(mxCell c,boolean add) throws CorruptIndexException, IOException, ParseException, IllegalArgumentException, SecurityException, InstantiationException, IllegalAccessException, InvocationTargetException, NoSuchMethodException {
+	public void updateCellInIndex(mxCell c,boolean add) throws Exception {
 		ArrayList<mxCell> l = new ArrayList<mxCell>();
 		l.add(c);
 		search.updateIndex(l,add);
 	}
-	public void updateCellsInIndex(Collection<mxCell> cs,boolean add) throws CorruptIndexException, IOException, ParseException, IllegalArgumentException, SecurityException, InstantiationException, IllegalAccessException, InvocationTargetException, NoSuchMethodException {
+	public void updateCellsInIndex(Collection<mxCell> cs,boolean add) throws Exception {
 		search.updateIndex(cs,add);
 	}
 	
